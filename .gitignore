@@ -26,3 +26,16 @@
 *.exe
 *.out
 *.app
+
+# Others
+*.sdf
+*.sln
+*.suo
+*.vcxproj
+*.filters
+*.tlog
+*.log
+*.pdb
+*.idb
+*.lastbuildstate
+
