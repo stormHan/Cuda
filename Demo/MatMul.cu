@@ -21,7 +21,9 @@ enum Type
 	Mode2 = 2	 //Mode 2 :不让一个线程完整计算一个C[i][j]，通过C(i,j) = sum { A(i,k)*B(k,j) }发现，我们还可以再细度划分：
 				 //		   sub(i,j) = sum{A(i,ksub+offsetA)*B(ksub+offsetB,j)}  0<=ksub < blockSize
 				 //			C(i, j) = sum{ Csub(i, j) }
-				 //			就是把矩阵分成n*n个大的子块，然后每一个block负责计算子块i 和 子块j的子乘积，计算完毕后加起来则可。这里主要使用了共享显存作优化。
+				 //			就是把矩阵分成n*n个大的子块，然后每一个block负责计算子块i 和 子块j的子乘积，
+				 //			计算完毕后加起来则可。这里主要使用了共享显存作优化。
+				 //			这是一种 shared memory的方法。
 };
 
 cudaError_t addWithCuda(float *c, const float *a, const float *b, unsigned int WA, unsigned int HA, unsigned int WB, unsigned int HB, Type mode);
@@ -64,7 +66,7 @@ template<int BLOCK_SIZE> __global__ void MatrixMulGPU_2(float *c, const float *a
 	// Index of the first sub-matrix of B processed by the block
 	int bBegin = BLOCK_SIZE * bx;
 
-	// Step size used to iterate through the sub-matrices of B
+	// Step size used to iterate through the sub-matrices of B 
 	int bStep = BLOCK_SIZE * WB;
 
 	// Csub is used to store the element of the block sub-matrix
