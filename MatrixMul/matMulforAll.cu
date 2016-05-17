@@ -173,7 +173,7 @@ void randomInit(float* _data, int _size)
 {
 	for (int i = 0; i < _size; ++i)
 	{
-		_data[i] = rand() / (float)RAND_MAX * 100;
+		_data[i] = rand() / (float)RAND_MAX;
 	}
 }
 
@@ -191,10 +191,14 @@ void printMatrix(float* m_Matrix, int W, int H)
 bool CheckAnswer(const float* _C, const float* _D, unsigned int size)
 {
 	bool isRight = true;
-	for (int i = 0; i < size && isRight == true; ++i)
+	for (int i = 0; i < size /*&& isRight == true*/; ++i)
 	{
 		if (_C[i] != _D[i])
+		{
 			isRight = false;
+			printf("%d : %3.8f != %3.8f \n", i, _C[i], _D[i]);
+		}
+			
 	}
 
 	return isRight;
@@ -221,6 +225,7 @@ int main()
 	memset(E, 0.0, sizeof(float) * height_A * width_B);
 	memset(F, 0.0, sizeof(float) * height_A * width_B);
 
+	Type m_Mode;
 
 	//产生随机数生成器
 	srand((unsigned)time(0));
@@ -239,89 +244,95 @@ int main()
 	MatrixMulCPU(C, A, B, width_A, height_A, width_B, height_B);
 	printf("CPU use time : %dms\n", GetTickCount() - tick1);
 
-	//GPU 
-	printf("GPU  normal matrix multiplication...\n");
-	Type m_Mode = Mode1;
 
-	unsigned int tick2 = GetTickCount();
-	cudaError_t cudaStatus = addWithCuda(D, A, B, width_A, height_A, width_B, height_B, m_Mode);
-	if (cudaStatus != cudaSuccess)
-	{
-		fprintf(stderr, "addWithCuda failed!\n");
-		return 1;
-	}
-	printf("GPU mode1 use time : %dms\n", GetTickCount() - tick2);
+		//GPU 
+		printf("GPU  normal matrix multiplication...\n");
+		m_Mode = Mode1;
 
-	printf("GPU  with shared memory and matrix being blocked matrix multiplication...\n");
-	m_Mode = Mode2;
-	unsigned int tick3 = GetTickCount();
-	cudaStatus = addWithCuda(E, A, B, width_A, height_A, width_B, height_B, m_Mode);
-	if (cudaStatus != cudaSuccess)
-	{
-		fprintf(stderr, "addWithCuda failed!\n");
-		return 1;
-	}
-	printf("GPU  with shared memory use time : %dms\n", GetTickCount() - tick3);
+		cudaError_t cudaStatus = addWithCuda(D, A, B, width_A, height_A, width_B, height_B, m_Mode);
+		if (cudaStatus != cudaSuccess)
+		{
+			fprintf(stderr, "addWithCuda failed!\n");
+			return 1;
+		}
+
+		printf("GPU  with shared memory and matrix being blocked matrix multiplication...\n");
+		m_Mode = Mode2;
+
+		cudaStatus = addWithCuda(E, A, B, width_A, height_A, width_B, height_B, m_Mode);
+		if (cudaStatus != cudaSuccess)
+		{
+			fprintf(stderr, "addWithCuda failed!\n");
+			return 1;
+		}
 	
-	//GPU mode3 with texture memory
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventRecord(start, 0);
+		//GPU mode3 with texture memory
 
-	cudaChannelFormatDesc channelDescA = cudaCreateChannelDesc((int)sizeof(float) * 8, 0, 0, 0, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDescB = cudaCreateChannelDesc((int)sizeof(float) * 8, 0, 0, 0, cudaChannelFormatKindFloat);
+		cudaChannelFormatDesc channelDescA = cudaCreateChannelDesc((int)sizeof(float) * 8, 0, 0, 0, cudaChannelFormatKindFloat);
+		cudaChannelFormatDesc channelDescB = cudaCreateChannelDesc((int)sizeof(float) * 8, 0, 0, 0, cudaChannelFormatKindFloat);
 
-	cudaArray* mat_A;
-	cudaArray* mat_B;
+		cudaArray* mat_A;
+		cudaArray* mat_B;
 
-	cudaMallocArray(&mat_A, &channelDescA, width_A, height_A);
-	cudaMallocArray(&mat_B, &channelDescB, width_B, height_B);
+		cudaMallocArray(&mat_A, &channelDescA, width_A, height_A);
+		cudaMallocArray(&mat_B, &channelDescB, width_B, height_B);
 
-	cudaMemcpyToArray(mat_A, 0, 0, A, sizeof(float) * height_A * width_A, cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(mat_B, 0, 0, B, sizeof(float) * height_B * width_B, cudaMemcpyHostToDevice);
+		cudaMemcpyToArray(mat_A, 0, 0, A, sizeof(float) * height_A * width_A, cudaMemcpyHostToDevice);
+		cudaMemcpyToArray(mat_B, 0, 0, B, sizeof(float) * height_B * width_B, cudaMemcpyHostToDevice);
 
-	//texA.addressMode[0] = cudaAddressModeWrap;
-	//texA.addressMode[1] = cudaAddressModeWrap;
-	texA.filterMode = cudaFilterModePoint;
-	texA.normalized = false;
-	//texB.addressMode[0] = cudaAddressModeWrap;
-	//texB.addressMode[1] = cudaAddressModeWrap;
-	texB.filterMode = cudaFilterModePoint;
-	texB.normalized = false;
+		//texA.addressMode[0] = cudaAddressModeWrap;
+		//texA.addressMode[1] = cudaAddressModeWrap;
+		texA.filterMode = cudaFilterModePoint;
+		texA.normalized = false;
+		//texB.addressMode[0] = cudaAddressModeWrap;
+		//texB.addressMode[1] = cudaAddressModeWrap;
+		texB.filterMode = cudaFilterModePoint;
+		texB.normalized = false;
 
-	cudaBindTextureToArray(texA, mat_A, channelDescA);
-	cudaBindTextureToArray(texB, mat_B, channelDescB);
+		cudaBindTextureToArray(texA, mat_A, channelDescA);
+		cudaBindTextureToArray(texB, mat_B, channelDescB);
 
+		float* d_C = NULL;
+		cudaMalloc(&d_C, width_B * height_A * sizeof(float));
 
-	float* d_C = NULL;
-	cudaMalloc(&d_C, width_B * height_A * sizeof(float));
+		int block_size = 32;
 
-	int block_size = 32;
+		dim3 Threads(block_size, block_size);
+		dim3 Blocks(width_B / block_size, height_A / block_size);
 
-	dim3 Threads(block_size, block_size);
-	dim3 Blocks(width_B / block_size, height_A / block_size);
+		cudaEvent_t start3, stop3;
+		cudaEventCreate(&start3);
+		cudaEventCreate(&stop3);
+		cudaEventRecord(start3, 0);
 
-	MatrixMul << < Threads, Blocks >> >(d_C, width_B, height_A);
+		MatrixMul << < Threads, Blocks >> >(d_C, width_B, height_A);
 
-	cudaMemcpy(F, d_C, sizeof(float) * width_B * height_A, cudaMemcpyDeviceToHost);
+		cudaEventRecord(stop3, 0);
+		cudaEventSynchronize(stop3);
 
-	cudaEventRecord(stop, 0);
-	cudaEventSynchronize(stop);
+		float elaspsedTime3;
+		cudaEventElapsedTime(&elaspsedTime3, start3, stop3);
+		printf("GPU with Texutre Memory time : %3.1fms \n", elaspsedTime3);
+		cudaMemcpy(F, d_C, sizeof(float) * width_B * height_A, cudaMemcpyDeviceToHost);
 
-	float elaspsedTime;
-	cudaEventElapsedTime(&elaspsedTime, start, stop);
-	printf("GPU with Texutre Memory time : %3.1fms \n", elaspsedTime);
+		cudaFree(d_C);
+		cudaFree(mat_A);
+		cudaFree(mat_B);
 
-	cudaFree(d_C);
-	cudaFree(mat_A);
-	cudaFree(mat_B);
-
+	
 	//检查GPU, CPU 计算的结果是否相同
 	printf("Checking answer...\n");
-	if (!CheckAnswer(C, D, height_A * width_B) || !CheckAnswer(C, E, height_A * width_B) || !CheckAnswer(C, F, height_A * width_B))
-		printf("The answer is wrong!");
-	else printf("The answer is right!");
+	if (!CheckAnswer(E, D, height_A * width_B))
+		printf("The answer1 is wrong!");
+	else printf("The answer1 is right!");
+
+	if (!CheckAnswer(E, F, height_A * width_B))
+		printf("The answer2 is wrong!");
+	else printf("The answer2 is right!");
+
+	//if (!CheckAnswer(C, F, height_A * width_B))
+	//	printf("The answer3 is wrong!");
+	//else printf("The answer3 is right!");
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
@@ -331,7 +342,7 @@ int main()
 		fprintf(stderr, "cudaDeviceReset failed!");
 		return 1;
 	}
-
+	getchar();
 	return 0;
 }
 
@@ -392,12 +403,37 @@ cudaError_t addWithCuda(float *c, const float *a, const float *b, unsigned int W
 	// Launch a kernel on the GPU with one thread for each element.
 	if (mode == Mode1)
 	{
+		cudaEvent_t start1, stop1;
+		cudaEventCreate(&start1);
+		cudaEventCreate(&stop1);
+		cudaEventRecord(start1, 0);
+
 		MatrixMulGPU_1 << <Blocks, Threads >> >(dev_c, dev_a, dev_b, WA, WB);
+
+
+		cudaEventRecord(stop1, 0);
+		cudaEventSynchronize(stop1);
+
+		float elaspsedTime1;
+		cudaEventElapsedTime(&elaspsedTime1, start1, stop1);
+		printf("GPU time : %3.1fms \n", elaspsedTime1);
 	}
 
 	if (mode == Mode2)
 	{
+		cudaEvent_t start2, stop2;
+		cudaEventCreate(&start2);
+		cudaEventCreate(&stop2);
+		cudaEventRecord(start2, 0);
+
 		MatrixMulGPU_2<16> << <Blocks, Threads >> >(dev_c, dev_a, dev_b, WA, WB);
+
+		cudaEventRecord(stop2, 0);
+		cudaEventSynchronize(stop2);
+
+		float elaspsedTime2;
+		cudaEventElapsedTime(&elaspsedTime2, start2, stop2);
+		printf("GPU with Shared Memory time : %3.1fms \n", elaspsedTime2);
 	}
 
 	// Check for any errors launching the kernel
