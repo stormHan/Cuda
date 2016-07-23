@@ -211,6 +211,7 @@ int main()
 	const int width_B = 1024;
 	const int height_B = 1024;
 
+	//申请CPU中的一段内存
 	float *B = (float *)malloc(sizeof(float) * height_B * width_B);
 	float *A = (float *)malloc(sizeof(float) * height_A * width_A);
 	float *C = (float *)malloc(sizeof(float) * height_A * width_B);
@@ -218,6 +219,7 @@ int main()
 	float *E = (float *)malloc(sizeof(float) * height_A * width_B);
 	float *F = (float *)malloc(sizeof(float) * height_A * width_B);
 
+	//初始化这段内存
 	memset(A, 0.0, sizeof(float) * height_A * width_A);
 	memset(B, 0.0, sizeof(float) * height_B * width_B);
 	memset(C, 0.0, sizeof(float) * height_A * width_B);
@@ -249,6 +251,7 @@ int main()
 		printf("GPU  normal matrix multiplication...\n");
 		m_Mode = Mode1;
 
+		//载入到GPU
 		cudaError_t cudaStatus = addWithCuda(D, A, B, width_A, height_A, width_B, height_B, m_Mode);
 		if (cudaStatus != cudaSuccess)
 		{
